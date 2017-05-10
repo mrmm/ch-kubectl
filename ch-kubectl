@@ -1,0 +1,191 @@
+#! /bin/bash
+## Var env using in the script
+KUBECTL_BINS="${HOME}/.bin/kubectl_bins"
+KUBECTL_BIN_PATH="${HOME}/.bin/kubectl"
+
+## Selected kubectl version
+SELECTED_VERSION_FILE_NAME=".selected_version"
+
+## Default system details
+DEFAULT_SYSTEM="linux"
+DEFAULT_ARCH="amd64"
+
+## useful variables
+SCRIPT_NAME="chkubectl"
+KUBECTL_PREFIX="kubectl_v"
+
+## Coloring
+yellow=$(tput setaf 3)
+red=$(tput setaf 1)
+green=$(tput setaf 2)
+normal=$(tput sgr0)
+
+## official kubectl repo
+DOWNLOAD_URL="https://storage.googleapis.com/kubernetes-release/release"
+
+usage() {
+  cat <<EOF
+USAGE:
+  ${SCRIPT_NAME}                                : show this message
+  ${SCRIPT_NAME} <KUBECTL_VERSION>              : switch kubeclt version
+  ${SCRIPT_NAME} -l, list                       : display available local kubectl version
+  ${SCRIPT_NAME} -D, download <KUBECTL_VERSION> : download kubectl version from official k8s repo
+  ${SCRIPT_NAME} -d, delete <KUBECTL_VERSION>   : delete kubectl version from local repo
+  ${SCRIPT_NAME} -h, help                       : show this message
+EOF
+  exit 1
+}
+
+get_cpu_architecture(){
+  platform='unknown'
+  unamestr=`uname -m`
+  if [[ "$unamestr" == 'x86_64' ]]; then
+     platform='amd64'
+  else
+    platform="${DEFAULT_ARCH}"
+  fi
+  echo "${platform}"
+}
+
+get_system_platfrom(){
+  platform='unknown'
+  unamestr=`uname -s`
+  if [[ "$unamestr" == 'Linux' ]]; then
+     platform='linux'
+  elif [[ "$unamestr" == 'Darwin' ]]; then
+     platform='darwin'
+  else
+    platform="${DEFAULT_SYSTEM}"
+  fi
+  echo "${platform}"
+}
+
+list_available_versions(){
+  local selected_ver="$(get_selected_version)"
+
+  echo "${yellow} [info] list of available local versions : ${normal}"
+  for f in $(ls ${KUBECTL_BINS}); do
+    local version=${f//kubectl_v}
+    if [[ "$version" == "$selected_ver" ]]; then
+      echo "${green} - ${version} [selected version] ${normal}"
+    else
+      echo " - ${version}"
+    fi
+  done
+}
+
+delete_kubectl_binary(){
+  local kubectl_file="${KUBECTL_BINS}/${KUBECTL_PREFIX}${1}"
+  if [[ -f "${kubectl_file}" ]]; then
+    read -p "Do you want to delete kubectl v${1} from local repo [nN/yY] : " -n 1 -r
+    echo    # (optional) move to a new line
+    if [[ $REPLY =~ ^[Yy]$ ]]
+    then
+      echo "${yellow} [info] deleting kubectl v${1} ! ${normal}"
+      rm ${kubectl_file} &> /dev/null
+      if [ $? -eq 0 ]; then
+          echo "${yellow} [info] kubectl v${1} deleted successfully ! ${normal}"
+      fi
+    fi
+  fi
+}
+
+download_kubectl_binary(){
+  local platform="$(get_system_platfrom)"
+  local arch="$(get_cpu_architecture)"
+  local kubectl_file="${KUBECTL_BINS}/${KUBECTL_PREFIX}${1}"
+  local full_url="${DOWNLOAD_URL}/v${1}/bin/${platform}/${arch}/kubectl"
+  if [[ -f "${kubectl_file}" ]]; then
+    echo "${red} [warning] kubectl version [v${1}] already exists in local repo ! ${normal}"
+    echo "${yellow} [info] try to ${SCRIPT_NAME} delete ${1} and re-run the command !${normal}"
+  else
+    read -p "Do you want to download kubectl v${1} [nN/yY] : " -n 1 -r
+    echo    # (optional) move to a new line
+    if [[ $REPLY =~ ^[Yy]$ ]]
+    then
+      echo "${yellow} [info] downloading kubectl to [${kubectl_file}] ${normal}"
+      echo "${full_url}"
+      curl -o ${kubectl_file} ${full_url}
+      chmod u+x ${kubectl_file}
+    else
+      exit 1
+    fi
+  fi
+
+}
+
+binary_exists() {
+  local full_path="${KUBECTL_BINS}/${KUBECTL_PREFIX}${1}"
+  if [[ -f "${full_path}" ]]; then
+    echo "${full_path}"
+  else
+    echo "${red} [error] binary v${1} is missing ! ${normal}" >&2
+    download_kubectl_binary ${1}
+  fi
+}
+
+remove_old_link(){
+  echo "${yellow} [info] removing old kubectl link ! ${normal}"
+  rm ${KUBECTL_BIN_PATH} &> /dev/null
+}
+
+create_link(){
+  ln -s ${1} ${KUBECTL_BIN_PATH}
+}
+
+update_selected_version(){
+  echo "${1}" > ${KUBECTL_BINS}/${SELECTED_VERSION_FILE_NAME}
+}
+
+get_selected_version(){
+  cat ${KUBECTL_BINS}/${SELECTED_VERSION_FILE_NAME}
+}
+
+reload_shell(){
+  exec $SHELL -l
+}
+
+switch_kubectl(){
+  local bin_path="$(binary_exists ${1})"
+  if [[ -z "${bin_path}" ]]; then
+    download_kubectl_binary ${1}
+  else
+    remove_old_link
+    create_link ${bin_path}
+    update_selected_version ${1}
+    #reload_shell
+    echo "${yellow} [info] kubectl version switched to v${1}"
+  fi
+}
+
+main() {
+  if [[ "$#" -eq 0 ]]; then
+    usage
+  elif [[ "$#" -gt 2 ]]; then
+    echo "${red} [error] too many flags ${normal}" >&2
+    usage
+  elif [[ "$#" -eq 1 ]]; then
+    if [[ "${1}" == '-h' || "${1}" == 'help' ]]; then
+      usage
+    elif [[ "${1}" == '-l' || "${1}" == 'list' ]]; then
+      list_available_versions
+    else
+      switch_kubectl ${1}
+    fi
+  elif [[ "$#" -eq 2 ]]; then
+    if [[ "${1}" == '-D' || "${1}" == 'download' ]]; then
+      download_kubectl_binary ${2}
+    elif [[ "${1}" == '-d' || "${1}" == 'delete' ]]; then
+      delete_kubectl_binary ${2}
+    else
+      usage
+    fi
+  else
+    usage
+  fi
+
+}
+
+main "$@"
+
+export SELECTED_KUBECTL_VERSION="$(get_selected_version)"
