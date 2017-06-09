@@ -63,7 +63,7 @@ get_system_platfrom(){
 list_available_versions(){
   local selected_ver="$(get_selected_version)"
 
-  echo "${yellow} [info] list of available local versions : ${normal}"
+  echo "List of locally available versions : "
   for f in $(ls ${KUBECTL_BINS}); do
     local version=${f//kubectl_v}
     if [[ "$version" == "$selected_ver" ]]; then
@@ -138,6 +138,7 @@ update_selected_version(){
 }
 
 get_selected_version(){
+  touch ${KUBECTL_BINS}/${SELECTED_VERSION_FILE_NAME}
   cat ${KUBECTL_BINS}/${SELECTED_VERSION_FILE_NAME}
 }
 
