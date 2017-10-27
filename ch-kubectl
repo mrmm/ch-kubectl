@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/bin/bash
 ## Var env using in the script
 KUBECTL_BINS="${HOME}/.bin/kubectl_bins"
 KUBECTL_BIN_PATH="${HOME}/.bin/kubectl"
@@ -13,6 +13,7 @@ DEFAULT_ARCH="amd64"
 ## useful variables
 SCRIPT_NAME="chkubectl"
 KUBECTL_PREFIX="kubectl_v"
+KUBECTL_CMD_ALIAS="kubectl_v"
 
 ## Coloring
 yellow=$(tput setaf 3)
@@ -34,6 +35,10 @@ USAGE:
   ${SCRIPT_NAME} -h, help                       : show this message
 EOF
   exit 1
+}
+
+ensure_directories(){
+  mkdir -p ${KUBECTL_BINS}
 }
 
 get_cpu_architecture(){
@@ -77,7 +82,7 @@ list_available_versions(){
 delete_kubectl_binary(){
   local kubectl_file="${KUBECTL_BINS}/${KUBECTL_PREFIX}${1}"
   if [[ -f "${kubectl_file}" ]]; then
-    read -p "Do you want to delete kubectl v${1} from local repo [nN/yY] : " -n 1 -r
+    read -p "${red} do you want to delete kubectl v${1} from local repo [nN/yY] : " -n 1 -r
     echo    # (optional) move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]
     then
@@ -90,6 +95,18 @@ delete_kubectl_binary(){
   fi
 }
 
+is_file_executable(){
+  local is_exec=$(file ${1} | grep "executable")
+  if [[ ! -z $is_exec ]]; then
+    chmod u+x ${1}
+    echo "true"
+  else
+    rm ${1}
+    echo "false"
+  fi
+
+}
+
 download_kubectl_binary(){
   local platform="$(get_system_platfrom)"
   local arch="$(get_cpu_architecture)"
@@ -99,14 +116,18 @@ download_kubectl_binary(){
     echo "${red} [warning] kubectl version [v${1}] already exists in local repo ! ${normal}"
     echo "${yellow} [info] try to ${SCRIPT_NAME} delete ${1} and re-run the command !${normal}"
   else
-    read -p "Do you want to download kubectl v${1} [nN/yY] : " -n 1 -r
+    read -p "${green} do you want to download kubectl v${1} [nN/yY] : " -n 1 -r
     echo    # (optional) move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]
     then
       echo "${yellow} [info] downloading kubectl to [${kubectl_file}] ${normal}"
-      echo "${full_url}"
-      curl -o ${kubectl_file} ${full_url}
-      chmod u+x ${kubectl_file}
+      curl -so ${kubectl_file} ${full_url}
+      check_result=$(is_file_executable ${kubectl_file})
+      if [ "$check_result" = "true"  ]; then
+        echo "${green} [info] file downloaded successfully"
+      else
+        echo "${red} [error] version requested does not exist on the remote server !"
+      fi
     else
       exit 1
     fi
@@ -187,6 +208,7 @@ main() {
 
 }
 
+ensure_directories
 main "$@"
 
 export SELECTED_KUBECTL_VERSION="$(get_selected_version)"
