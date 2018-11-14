@@ -1,7 +1,7 @@
 #!/bin/bash
 ## Var env using in the script
-KUBECTL_BINS="${HOME}/.bin/kubectl_bins"
-KUBECTL_BIN_PATH="${HOME}/.bin/kubectl"
+KUBECTL_BINS="${KUBECTL_BINS:-${HOME}/.bin/kubectl_bins}"
+KUBECTL_BIN_PATH="${KUBECTL_BIN_PATH:-${HOME}/.bin/kubectl}"
 
 ## Selected kubectl version
 SELECTED_VERSION_FILE_NAME=".selected_version"
